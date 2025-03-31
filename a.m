@@ -1,6 +1,8 @@
 #import <Foundation/Foundation.h>
 #import <IOKit/usb/IOUSBLib.h>
 #import <IOKit/IOMessage.h>
+#import <sys/types.h>
+#import <sys/wait.h>
 
 static IONotificationPortRef notificationPort;
 static io_iterator_t addedIterator;
@@ -8,8 +10,9 @@ static io_iterator_t removedIterator;
 
 static int TARGET_VENDOR_ID = 0;
 static int TARGET_PRODUCT_ID = 0;
+static NSArray *commandArguments = nil;
 
-// Function to get the Vendor ID and Product ID of a USB device
+// Function to check if a USB device matches the target Vendor ID & Product ID
 BOOL isTargetDevice(io_service_t usbDevice) {
     CFNumberRef vendorIDRef = IORegistryEntryCreateCFProperty(usbDevice, CFSTR("idVendor"), kCFAllocatorDefault, 0);
     CFNumberRef productIDRef = IORegistryEntryCreateCFProperty(usbDevice, CFSTR("idProduct"), kCFAllocatorDefault, 0);
@@ -28,12 +31,53 @@ BOOL isTargetDevice(io_service_t usbDevice) {
     return (vendorID == TARGET_VENDOR_ID && productID == TARGET_PRODUCT_ID);
 }
 
+// Function to execute a command with the USB_EVENT environment variable
+void runCommand(const char *eventType) {
+    if (commandArguments.count == 0) {
+        NSLog(@"❌ No command arguments provided.");
+        return;
+    }
+
+    // Set the USB_EVENT environment variable
+    setenv("USB_EVENT", eventType, 1);
+
+    // Prepare the arguments for execvp (first element is the command)
+    const char *command = [commandArguments[0] UTF8String];
+    char *args[commandArguments.count + 1];
+
+    for (int i = 0; i < commandArguments.count; i++) {
+        args[i] = (char *)[commandArguments[i] UTF8String];
+    }
+    args[commandArguments.count] = NULL; // Null-terminate the argument list
+
+    // Create a new process (fork)
+    pid_t pid = fork();
+    
+    if (pid == -1) {
+        // Fork failed
+        perror("fork failed");
+        return;
+    }
+
+    if (pid == 0) {
+        // Child process: execute the command
+        if (execvp(command, args) == -1) {
+            perror("execvp failed");
+            exit(1); // Exit child process on failure
+        }
+    } else {
+        // Parent process continues (does not block)
+        return;
+    }
+}
+
 // Callback function for USB attach events
 void USBDeviceAttached(void *refcon, io_iterator_t iterator) {
     io_service_t usbDevice;
     while ((usbDevice = IOIteratorNext(iterator))) {
         if (isTargetDevice(usbDevice)) {
             NSLog(@"✅ Target USB device ATTACHED! (Vendor: 0x%X, Product: 0x%X)", TARGET_VENDOR_ID, TARGET_PRODUCT_ID);
+            runCommand("attach");
         }
         IOObjectRelease(usbDevice);
     }
@@ -45,6 +89,7 @@ void USBDeviceDetached(void *refcon, io_iterator_t iterator) {
     while ((usbDevice = IOIteratorNext(iterator))) {
         if (isTargetDevice(usbDevice)) {
             NSLog(@"❌ Target USB device DETACHED! (Vendor: 0x%X, Product: 0x%X)", TARGET_VENDOR_ID, TARGET_PRODUCT_ID);
+            runCommand("detach");
         }
         IOObjectRelease(usbDevice);
     }
@@ -53,16 +98,25 @@ void USBDeviceDetached(void *refcon, io_iterator_t iterator) {
 int main(int argc, const char * argv[]) {
     @autoreleasepool {
         // Ensure correct number of arguments
-        if (argc != 3) {
-            NSLog(@"❌ Usage: %s <VendorID> <ProductID>\nExample: %s 0x1234 0x5678", argv[0], argv[0]);
+        if (argc < 3) {
+            NSLog(@"❌ Usage: %s <VendorID> <ProductID> <Command...>", argv[0]);
+            NSLog(@"Example: %s 0x1234 0x5678 echo Attached!", argv[0]);
             return 1;
         }
 
-        // Parse command line arguments
+        // Parse Vendor ID and Product ID
         sscanf(argv[1], "%x", &TARGET_VENDOR_ID);
         sscanf(argv[2], "%x", &TARGET_PRODUCT_ID);
-        NSLog(@"🎯 Monitoring USB device (Vendor: 0x%X, Product: 0x%X)", TARGET_VENDOR_ID, TARGET_PRODUCT_ID);
 
+        // Store command arguments (excluding VendorID and ProductID)
+        NSMutableArray *commandArray = [NSMutableArray array];
+        for (int i = 3; i < argc; i++) {
+            [commandArray addObject:[NSString stringWithUTF8String:argv[i]]];
+        }
+        commandArguments = [commandArray copy];
+        
+        NSLog(@"🎯 Monitoring USB device (Vendor: 0x%X, Product: 0x%X)", TARGET_VENDOR_ID, TARGET_PRODUCT_ID);
+        
         // Create notification port
         mach_port_t masterPort;
         IOMasterPort(MACH_PORT_NULL, &masterPort);
