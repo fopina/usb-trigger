@@ -2,15 +2,40 @@
 #import <IOKit/usb/IOUSBLib.h>
 #import <IOKit/IOMessage.h>
 
+// Replace these with your USB device's Vendor ID and Product ID
+#define TARGET_VENDOR_ID  0x17e9  // Change this to your device's Vendor ID
+#define TARGET_PRODUCT_ID 0x4307  // Change this to your device's Product ID
+
 static IONotificationPortRef notificationPort;
 static io_iterator_t addedIterator;
 static io_iterator_t removedIterator;
+
+// Function to get the Vendor ID and Product ID of a USB device
+BOOL isTargetDevice(io_service_t usbDevice) {
+    CFNumberRef vendorIDRef = IORegistryEntryCreateCFProperty(usbDevice, CFSTR("idVendor"), kCFAllocatorDefault, 0);
+    CFNumberRef productIDRef = IORegistryEntryCreateCFProperty(usbDevice, CFSTR("idProduct"), kCFAllocatorDefault, 0);
+    
+    if (!vendorIDRef || !productIDRef) {
+        return NO; // Skip if IDs are missing
+    }
+
+    int vendorID, productID;
+    CFNumberGetValue(vendorIDRef, kCFNumberIntType, &vendorID);
+    CFNumberGetValue(productIDRef, kCFNumberIntType, &productID);
+    
+    CFRelease(vendorIDRef);
+    CFRelease(productIDRef);
+
+    return (vendorID == TARGET_VENDOR_ID && productID == TARGET_PRODUCT_ID);
+}
 
 // Callback function for USB attach events
 void USBDeviceAttached(void *refcon, io_iterator_t iterator) {
     io_service_t usbDevice;
     while ((usbDevice = IOIteratorNext(iterator))) {
-        NSLog(@"🔌 USB device attached!");
+        if (isTargetDevice(usbDevice)) {
+            NSLog(@"✅ Target USB device ATTACHED!");
+        }
         IOObjectRelease(usbDevice);
     }
 }
@@ -19,7 +44,9 @@ void USBDeviceAttached(void *refcon, io_iterator_t iterator) {
 void USBDeviceDetached(void *refcon, io_iterator_t iterator) {
     io_service_t usbDevice;
     while ((usbDevice = IOIteratorNext(iterator))) {
-        NSLog(@"❌ USB device detached!");
+        if (isTargetDevice(usbDevice)) {
+            NSLog(@"❌ Target USB device DETACHED!");
+        }
         IOObjectRelease(usbDevice);
     }
 }
@@ -57,7 +84,7 @@ int main(int argc, const char * argv[]) {
         // Process currently attached devices
         USBDeviceAttached(NULL, addedIterator);
 
-        // Matching dictionary for USB detach events (must be separate!)
+        // Matching dictionary for USB detach events
         CFMutableDictionaryRef matchingDictDetach = IOServiceMatching(kIOUSBDeviceClassName);
         if (!matchingDictDetach) {
             NSLog(@"❌ Failed to create detach matching dictionary");
@@ -81,7 +108,7 @@ int main(int argc, const char * argv[]) {
         // Process currently removed devices
         USBDeviceDetached(NULL, removedIterator);
 
-        NSLog(@"🖥️ Listening for USB attach & detach events... (Press Ctrl+C to exit)");
+        NSLog(@"🖥️ Listening for Target USB attach & detach events... (Press Ctrl+C to exit)");
         CFRunLoopRun(); // Keep the program running
 
         // Cleanup (not reached in normal execution)
