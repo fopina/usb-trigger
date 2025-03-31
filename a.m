@@ -2,13 +2,12 @@
 #import <IOKit/usb/IOUSBLib.h>
 #import <IOKit/IOMessage.h>
 
-// Replace these with your USB device's Vendor ID and Product ID
-#define TARGET_VENDOR_ID  0x17e9  // Change this to your device's Vendor ID
-#define TARGET_PRODUCT_ID 0x4307  // Change this to your device's Product ID
-
 static IONotificationPortRef notificationPort;
 static io_iterator_t addedIterator;
 static io_iterator_t removedIterator;
+
+static int TARGET_VENDOR_ID = 0;
+static int TARGET_PRODUCT_ID = 0;
 
 // Function to get the Vendor ID and Product ID of a USB device
 BOOL isTargetDevice(io_service_t usbDevice) {
@@ -34,7 +33,7 @@ void USBDeviceAttached(void *refcon, io_iterator_t iterator) {
     io_service_t usbDevice;
     while ((usbDevice = IOIteratorNext(iterator))) {
         if (isTargetDevice(usbDevice)) {
-            NSLog(@"✅ Target USB device ATTACHED!");
+            NSLog(@"✅ Target USB device ATTACHED! (Vendor: 0x%X, Product: 0x%X)", TARGET_VENDOR_ID, TARGET_PRODUCT_ID);
         }
         IOObjectRelease(usbDevice);
     }
@@ -45,7 +44,7 @@ void USBDeviceDetached(void *refcon, io_iterator_t iterator) {
     io_service_t usbDevice;
     while ((usbDevice = IOIteratorNext(iterator))) {
         if (isTargetDevice(usbDevice)) {
-            NSLog(@"❌ Target USB device DETACHED!");
+            NSLog(@"❌ Target USB device DETACHED! (Vendor: 0x%X, Product: 0x%X)", TARGET_VENDOR_ID, TARGET_PRODUCT_ID);
         }
         IOObjectRelease(usbDevice);
     }
@@ -53,6 +52,17 @@ void USBDeviceDetached(void *refcon, io_iterator_t iterator) {
 
 int main(int argc, const char * argv[]) {
     @autoreleasepool {
+        // Ensure correct number of arguments
+        if (argc != 3) {
+            NSLog(@"❌ Usage: %s <VendorID> <ProductID>\nExample: %s 0x1234 0x5678", argv[0], argv[0]);
+            return 1;
+        }
+
+        // Parse command line arguments
+        sscanf(argv[1], "%x", &TARGET_VENDOR_ID);
+        sscanf(argv[2], "%x", &TARGET_PRODUCT_ID);
+        NSLog(@"🎯 Monitoring USB device (Vendor: 0x%X, Product: 0x%X)", TARGET_VENDOR_ID, TARGET_PRODUCT_ID);
+
         // Create notification port
         mach_port_t masterPort;
         IOMasterPort(MACH_PORT_NULL, &masterPort);
