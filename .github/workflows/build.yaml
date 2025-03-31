@@ -1,0 +1,40 @@
+name: Build usb-trigger for macOS (arm64 and amd64)
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        architecture: [x86_64, arm64]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up macOS environment
+      run: |
+        brew install clang
+
+    - name: Compile usb-trigger for ${{ matrix.architecture }}
+      run: |
+        if [[ "${{ matrix.architecture }}" == "x86_64" ]]; then
+          arch="x86_64"
+        else
+          arch="arm64"
+        fi
+        
+        clang -arch $arch -framework IOKit -framework Foundation -o usb-trigger usb-trigger.m
+
+    - name: Upload usb-trigger binaries as artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: usb-trigger-binaries
+        path: usb-trigger
