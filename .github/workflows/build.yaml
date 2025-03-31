@@ -11,26 +11,19 @@ on:
 jobs:
   build:
     runs-on: macos-latest
-    strategy:
-      matrix:
-        architecture: [x86_64, arm64]
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Compile usb-trigger for ${{ matrix.architecture }}
+    - name: Compile usb-trigger for both architectures
       run: |
-        if [[ "${{ matrix.architecture }}" == "x86_64" ]]; then
-          arch="x86_64"
-        else
-          arch="arm64"
-        fi
-        
-        clang -arch $arch -framework IOKit -framework Foundation -o usb-trigger usb-trigger.m
+        mkdir -p bin
+        clang -arch x86_64 -framework IOKit -framework Foundation -o bin/usb-trigger-x86_64 usb-trigger.m
+        clang -arch arm64 -framework IOKit -framework Foundation -o bin/usb-trigger-arm64 usb-trigger.m
 
     - name: Upload usb-trigger binaries as artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: usb-trigger-${{ matrix.architecture }}
-        path: usb-trigger
+        name: usb-trigger-binaries
+        path: bin/
