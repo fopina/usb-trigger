@@ -23,7 +23,12 @@ jobs:
         clang -arch arm64 -framework IOKit -framework Foundation -o bin/usb-trigger-arm64 usb-trigger.m
 
     - name: Upload usb-trigger binaries as artifacts
+      if: "!startsWith(github.ref, 'refs/tags/')"
       uses: actions/upload-artifact@v4
       with:
         name: usb-trigger-binaries
         path: bin/
+
+    - name: Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v2
