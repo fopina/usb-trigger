@@ -19,10 +19,6 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up macOS environment
-      run: |
-        brew install clang
-
     - name: Compile usb-trigger for ${{ matrix.architecture }}
       run: |
         if [[ "${{ matrix.architecture }}" == "x86_64" ]]; then
