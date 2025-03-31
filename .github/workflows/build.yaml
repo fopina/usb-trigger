@@ -1,4 +1,6 @@
 name: Build usb-trigger for macOS (arm64 and amd64)
+permissions:
+  contents: write
 
 on:
   push:
